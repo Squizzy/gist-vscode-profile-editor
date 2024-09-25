@@ -1,4 +1,4 @@
-""" Python application to clean up VSCode Profiles saved in github gists"""
+""" Python application to help clean up VSCode Profiles saved in github gists"""
 __author__ = "Squizzy"
 __copyright__ = "Copyright 2024, Squizzy"
 __credits__ = "Cursor code editor (/VSCode), Claude-AI"
