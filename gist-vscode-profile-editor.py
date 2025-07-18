@@ -10,9 +10,19 @@ import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-def load_profile(filename):
-    with open(filename, 'r') as json_file:
-        return json.load(json_file)
+class FileIO:
+    def __init__(self):
+        pass
+    
+    def load_profile(self, filename):
+        with open(filename, 'r') as json_file:
+            return json.load(json_file)
+        
+
+    def save_profile(self, profile, filename):
+        with open(filename, 'w') as json_file:
+            json.dump(profile, json_file, indent=2)
+
 
 def extract_settings(profile):
     settings_dict = json.loads(profile['settings'])
@@ -34,9 +44,6 @@ def update_profile(profile, settings, extensions, globalstate):
     globalstate_dict['storage'] = globalstate
     profile['globalState'] = json.dumps(globalstate_dict)
 
-def save_profile(profile, filename):
-    with open(filename, 'w') as json_file:
-        json.dump(profile, json_file, indent=2)
 
 class ProfileEditor:
     def __init__(self, master):
