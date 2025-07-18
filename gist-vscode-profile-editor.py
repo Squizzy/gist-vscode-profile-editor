@@ -14,10 +14,36 @@ class FileIO:
     def __init__(self):
         pass
     
+    
+    def load_profile(self):
+        filename = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+        if filename:
+            self.profile = load_profile(filename)
+            self.settings = extract_settings(self.profile)
+            self.extensions = extract_extensions(self.profile)
+            self.globalstate = extract_globalstate(self.profile)
+            self.display_settings()
+            self.display_extensions()
+            self.display_globalstate()
+            self.save_button.config(state='normal')
+            
+            
     def load_profile(self, filename):
         with open(filename, 'r') as json_file:
             return json.load(json_file)
         
+
+    def save_profile(self):
+        kept_settings = {key: self.settings[key] for key, var in self.setting_vars.items() if var.get()}
+        kept_extensions = [ext for ext in self.extensions if self.extension_vars[ext['identifier']['id']].get()]
+        kept_globalstate = {key: self.globalstate[key] for key, var in self.globalstate_vars.items() if var.get()}
+        update_profile(self.profile, kept_settings, kept_extensions, kept_globalstate)
+
+        filename = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+        if filename:
+            save_profile(self.profile, filename)
+            messagebox.showinfo("Success", "Profile saved successfully!")
+            self.changes_made = False
 
     def save_profile(self, profile, filename):
         with open(filename, 'w') as json_file:
@@ -44,6 +70,9 @@ def update_profile(profile, settings, extensions, globalstate):
     globalstate_dict['storage'] = globalstate
     profile['globalState'] = json.dumps(globalstate_dict)
 
+
+
+            
 
 class ProfileEditor:
     def __init__(self, master):
@@ -117,17 +146,7 @@ class ProfileEditor:
     def on_checkbox_change(self):
         self.changes_made = True
 
-    def load_profile(self):
-        filename = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
-        if filename:
-            self.profile = load_profile(filename)
-            self.settings = extract_settings(self.profile)
-            self.extensions = extract_extensions(self.profile)
-            self.globalstate = extract_globalstate(self.profile)
-            self.display_settings()
-            self.display_extensions()
-            self.display_globalstate()
-            self.save_button.config(state='normal')
+
 
     def display_settings(self):
         scrollable_frame = self.settings_frame.winfo_children()[0].winfo_children()[0]
