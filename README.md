@@ -1,11 +1,10 @@
-"# gist-vscode-profile-editor"  
+# gist-vscode-profile-editor
+
 https://github.com/Squizzy/gist-vscode-profile-editor
 
-# Version history
-- 0.1: First working app, not extensively tested.
+## What is it?
 
-# What is it?
-## A tool to edit/cleanup the vscode profile in a github gist when multiple vscode profiles were created from a clogged up Default profile.
+A tool to edit/cleanup the vscode profile in a github gist when multiple vscode profiles were created from a clogged up Default profile.
 
 This happens when you start programming and have no idea about profiles at first, you load as many extensions as you need to play with multiple languages, have multiple settings, and all get messy.  
 
@@ -13,7 +12,8 @@ Then you discover VSCode profiles and how you can save then in github gists, and
 
 This app allows you to clean each profile individually.
 
-# How to use? - step by step
+## How to use? - step by step
+
 - Go to ```gist.github.com``` and log on with your github account.
     - find the gist profile content for the profile you want to clean up.
     - copy the content into a local text file.
@@ -56,3 +56,8 @@ This app allows you to clean each profile individually.
 - Feel free to fork (Leave original attribution but modify at will)
 - There is tons of potential improvements possible, and testing.
     - if some testing has been done, then please report under issue and I'll add into comments
+
+
+## Version history
+
+- 0.1: First working app, not extensively tested.
