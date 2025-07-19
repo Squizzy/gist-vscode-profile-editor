@@ -6,12 +6,14 @@ __license__ = "GPL"
 __version__ = "0.1"
 __maintainer__ = "Squizzy"
 
+import os
 import sys
 import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
+from pprint import pprint
 
 class VSCodeProfile(BaseModel):
     ...
@@ -29,12 +31,24 @@ class IFileIO(ABC):
         pass
 
 class FileIO(IFileIO):
+    _local_vscode_registered_profiles: dict[str, str]
+    
+    _local_profiles: list[str]
+    
+    _local_extensions: list[str]
+    
     _filename: str
     _profile_data: str
 
     def __init__(self):
-        self._filename = None
-        self._profile_data = None
+        self._local_vscode_registered_profiles = {}
+        
+        self._local_profiles_path = ""
+        self._local_profiles = []
+        self._local_profiles_names = []
+        
+        self._filename = ""
+        self._profile_data = ""
         pass
     
 
@@ -42,32 +56,106 @@ class FileIO(IFileIO):
     def profile_data(self) -> str:
         return self._profile_data
 
-    def load_vscode_profile_to_modify(self) -> bool:
-        """Retrieve the content of a vscode profile file or URL
+    def _get_vscode_registered_vscode_profiles(self) -> bool:
+        """Retrieve the list of profiles that vscode has registered internally
+        
+        profile names and associated folders names are listed in globalStorage storage.json:
+        WINDOWS:    C:\\Users\\PROFILE_NAME\\AppData\\Roaming\\Code\\User\\globalStorage\\storage.json
         
         returns:
-            (str): the json raw data from the profile
+            (bool): True is the list of profiles that vscode has registered internally has been recovered
         """
-
-        if len(sys.argv) > 0:
-            # use command line arguments
-            self._filename = self._get_vscode_profile_filename_from_command_line()
-
-        if self._filename == None:
-            self._get_vscode_profile_filename_from_popup()
-
-        if self._filename == None:
-            print("No file selected, aborting.")
+        globalStorage_storage_json = ""
+        
+        # Set the path for the OS we are currently working with
+        if os.name == 'nt':
+            WINDOWS_GLOBAL_STORAGE_FILE: str = os.path.join(os.getenv('APPDATA'), "Code", "User", "globalStorage", "storage.json")
+            globalStorage_storage_json = WINDOWS_GLOBAL_STORAGE_FILE
+        elif os.name == 'darwin':
+            MACOS_GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "globalStorage", "storage.json")DER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            globalStorage_storage_json = MACOS_EXTENSIONS_FOLDER
+        elif os.name == 'posix':
+            LINUX__GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            globalStorage_storage_json = LINUX__GLOBAL_STORAGE_FILE
+        else:
+            print("Unsupported operating system")
             return False
         
-        self._load_vscode_profile_data() 
-        if self._profile_data is None:
-            print("No data found in the profile file, or not a proper VSCode profile file, aborting")
+        
+        if not os.path.isfile(globalStorage_storage_json):
+            print("No VSCode globalStorage storage.json, aborting")
             return False
+        
+        with open(globalStorage_storage_json, 'r') as globalStorage_storage:
+            storage = json.load(globalStorage_storage)
+        
+        # The link vscode profile name and vscode folder name are stored in userDataProfiles in storage.json
+        # in a list of dictionaries that contain {location: 'vscode folder name', 'name': 'vscode profile name'}
+        if "userDataProfiles" not in storage:
+            print("No VSCode userDataProfiles found in globalStorage storage.json, aborting")
+            return False
+        
+        # Check if there are any profile registered in userDataProfiles
+        if storage["userDataProfiles"] == []:
+            print("No VSCode profile has been registered in vscode (eg no profile has been created yet), aborting")
+        
+        # If so, then load them
+        for profile in storage["userDataProfiles"]:
+            self._local_vscode_registered_profiles[profile['location']] = profile['name']
+        
+        print(f"found {len(self._local_vscode_registered_profiles)} vscode profiles registered in vscode")
         
         return True
 
-    def _get_vscode_profile_filename_from_command_line(self) -> str | None:
+    def _get_vscode_local_profiles(self) -> bool:
+        """Retrieve all VSCode profiles on the current machine
+        profiles are stored in the following locations:
+        Windows:    %APPDATA%\\Code\\User\\profiles
+        macOS       $HOME/Library/Application\\ Support/Code/User/profiles.
+        Linux       $HOME/.config/Code/User/profiles.
+        """
+        local_profile_path: str = ""
+        local_profile: list[str]       
+         
+        # Get the profile names associated to the profiles folder names registered in vscode
+        if not self._get_vscode_registered_vscode_profiles():
+            return False
+        
+        # Set the local profiles path for the OS we are currently working with
+        if os.name == 'nt':
+            WINDOWS_PATH: str = os.path.join(os.getenv('APPDATA'), "Code", "User", "profiles")
+            local_profiles_path = WINDOWS_PATH
+        elif os.name == 'darwin':
+            MACOS_PATH: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "profiles")
+            local_profiles_path = MACOS_PATH
+        elif os.name == 'posix':
+            LINUX_PATH: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profiles")
+            local_profiles_path = LINUX_PATH
+        else:
+            print("Unsupported operating system")
+            return False 
+        
+        # Check that the folder for the local profiles exists
+        if not os.path.isdir(local_profiles_path):
+            print("No local profiles folder found, aborting")
+        
+        # Check that there are local profiles stored in the local profiles folder
+        local_profiles = os.listdir(local_profiles_path)
+        if local_profiles == []:
+            print("No local profiles found, aborting")
+
+        # check that all the local profile folders identified in the local profiles folder are registered in vscode
+        for local_profile in self._local_profiles:
+            if local_profile not in self._local_vscode_registered_profiles.keys():
+                print(f"vscode profile {local_profile} not registered in vscode, aborting")
+                return False
+        
+        self._local_profiles = local_profiles
+        print(f"found {len(self._local_profiles)} local profiles")
+        
+        return True
+
+    def _get_vscode_profile_filename_from_command_line(self) -> bool:
         """Parses the command line argument and returns the location of the profile data, if any
         
         returns:
@@ -84,14 +172,18 @@ class FileIO(IFileIO):
                     continue
                 else:
                     print("-f requires a file name to be provided. ignoring.")
-                    return
+                    return False
             elif filename_arg_expected:
                 # TODO: need to check that arg is a file that is reachable
-                return arg
+                self._filename = arg
+                break
             else:
                 print("command line argument not recognised. ignoring it.")
+                return False
+            
+        return True
         
-    def _get_vscode_profile_filename_from_popup(self) -> None:
+    def _get_vscode_profile_filename_from_popup(self) -> bool:
         """Use a popup to let the user select the file to process
         """
         file_path: str
@@ -102,6 +194,10 @@ class FileIO(IFileIO):
         
         if file_path:
             self._filename = file_path
+            return True
+        else:
+            print("No file selected, aborting.")
+            return False
 
             # # self.profile = load_profile(filename)
 
@@ -114,37 +210,111 @@ class FileIO(IFileIO):
             # self.display_extensions()
             # self.display_globalstate()
             # self.save_button.config(state='normal')
-            
-    def _load_vscode_profile_data(self) -> None:
+
+    def _get_vscode_profile_from_available_local_profiles(self) -> bool:
+        # Currently trying not to mess up with the current vscode...
+        # should provide a list of the profiles available and allow the user to select one
+        return False
+
+    def _load_vscode_profile_data(self) -> bool:
         """Attempt to load the data from the file selected by the user
         
+        return:
+            (bool): True if the file is a valid JSON, False otherwise
         """
 
+        # Check if user is ok to load a large file
         MAX_FILE_SIZE: int = 100_000
+        
+        file_size = os.path.getsize(self._filename)
+        
+        if file_size > MAX_FILE_SIZE:
+            load_anyway: bool = messagebox.askyesno(title="Large file size detected", 
+                                                    message=f"""File is more than {MAX_FILE_SIZE} bytes
+                                                                This seems rather large.
+                                                                Load anyway?""")
+            if load_anyway == messagebox.NO:
+                print("file too large, user aborted")
+                return False        
+
+        # Load the data
         retrieved_data: str
-
-        with open(self._filename, 'r') as vscode_profile_json_file:
-            file_length = len(vscode_profile_json_file)
-
-            if file_length > MAX_FILE_SIZE:
-                load_anyway = messagebox.askyesno(title="Large file size detected", message=f"File is more than {MAX_FILE_SIZE} bytes, which seems large. \nuse anyway?")
-                if load_anyway == messagebox.NO:
-                    print("file too large, user aborted")
-                    return
-                
-            retrieved_data = vscode_profile_json_file.read(file_length)
-        
         try:
-            self._profile_data = json.load(retrieved_data)
-        except json.JSONDecodeError as e:
-            # could be done more gracefully with requesting another file
-            print(f"Problem with file {self._filename}: Not a proper VSCode Profile file (json format expected), aborting")
-            self._profile_data = None
-            return
-    
-            # return json.load(json_file)
-            # return json_file
+            with open(self._filename, 'r') as vscode_profile_json_file:
+                retrieved_data = vscode_profile_json_file.read(file_size)
+        except FileNotFoundError:
+            print(f"File {self._filename} not found, aborting")
+            return False
         
+        # Check the data is json compliant before accepting
+        try:
+            self._profile_data = json.loads(retrieved_data)
+        except json.JSONDecodeError:
+            # could be done more gracefully with requesting another file for example
+            print(f"Problem with file {self._filename}: Not a proper VSCode Profile file (json format expected), aborting")
+            return False
+        
+        return True
+        
+    def load_vscode_profile_to_modify(self) -> bool:
+        """Retrieve the content of a vscode profile file or URL following different logic for selecting the file to load
+        
+        returns:
+            (str): the json raw data from the profile
+        """
+
+        if len(sys.argv) > 0:
+            # use command line arguments
+            if not self._get_vscode_profile_filename_from_command_line():
+
+                if not self._get_vscode_profile_filename_from_popup():
+                    print("No file selected, aborting.")
+                    return False
+
+        if not self._load_vscode_profile_data():
+            print("No data found in the profile file, or not a proper VSCode profile file, aborting")
+            return False
+        
+        return True
+
+
+    def _get_local_extensions_list(self) -> bool:
+        """Generates the list of the extensions that have been locally installed
+        Extensions are stored under:
+        WINDOWS:    %USERPROFILE%\\.vscode\\extensions
+        MACOS:      ~/.vscode/extensions
+        LINUX:      ~/.vscode/extensions
+        """
+        
+
+        # Set the path for the OS we are currently working with
+        if os.name == 'nt':
+            WINDOWS_EXTENSIONS_FOLDER: str = os.path.join(os.getenv('USERPROFILE'), ".vscode", "extensions")
+            self._local_extensions_folder = WINDOWS_EXTENSIONS_FOLDER
+        elif os.name == 'darwin':
+            MACOS_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            self._local_extensions_folder = MACOS_EXTENSIONS_FOLDER
+        elif os.name == 'posix':
+            LINUX_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            self._local_extensions_folder = LINUX_EXTENSIONS_FOLDER
+        else:
+            print("Unsupported operating system")
+            return False
+
+        # Check that the folder for the local extensions exists
+        if not os.path.isdir(self._local_extensions_folder):
+            print("No local extensions folder found, aborting")
+            return False
+
+        # Check that there are local extensions stored in the local extensions folder
+        local_extensions = os.listdir(self._local_extensions_folder)
+        if local_extensions == []:
+            print("No local extensions found, aborting")
+            return False
+        
+        print(local_extensions)
+        return True
+            
     def save_profile(self):
         kept_settings = {key: self.settings[key] for key, var in self.setting_vars.items() if var.get()}
         kept_extensions = [ext for ext in self.extensions if self.extension_vars[ext['identifier']['id']].get()]
@@ -153,11 +323,11 @@ class FileIO(IFileIO):
 
         filename = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
         if filename:
-            save_profile(self.profile, filename)
+            self._save_profile(self.profile, filename)
             messagebox.showinfo("Success", "Profile saved successfully!")
             self.changes_made = False
 
-    def save_profile(self, profile, filename):
+    def _save_profile(self, profile, filename):
         with open(filename, 'w') as json_file:
             json.dump(profile, json_file, indent=2)
 
@@ -171,7 +341,7 @@ class IVSCodeProfileProcessor(ABC):
 
 class VSCodeProfileProcessor(IVSCodeProfileProcessor):
     _profile_data: str
-    _settings_dict: Any
+    _settings_dict: dict
 
     def __init__(self, profile_data: str):
         self._profile_data = profile_data
@@ -180,7 +350,7 @@ class VSCodeProfileProcessor(IVSCodeProfileProcessor):
         self._extract_settings()
         pass
 
-    def _extract_settings():
+    def _extract_settings(self):
         self._settings_dict = json.loads(self._profile_data['settings'])
         # return json.loads(settings_dict["settings"])
 
@@ -321,7 +491,7 @@ class ProfileEditor:
 
         filename = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
         if filename:
-            save_profile(self.profile, filename)
+            self._save_profile(self.profile, filename)
             messagebox.showinfo("Success", "Profile saved successfully!")
             self.changes_made = False
 
