@@ -10,6 +10,8 @@ import os
 import sys
 import json
 import xmltodict # type: ignore
+import requests
+
 from tkinter import filedialog, messagebox #, ttk
 from abc import ABC, abstractmethod
 from pprint import pprint
@@ -49,6 +51,10 @@ class FileIO(IFileIO):
     _profile_to_modify_filepath: str # the location of the file to be modified
     _data_of_profile_to_modify: str # the data from the profile, not JSON decoded yet
 
+    _json_gist_key: str
+    _json_gist_data: str
+
+
     def __init__(self):
         self._local_vscode_registered_profiles = {}
         
@@ -74,6 +80,10 @@ class FileIO(IFileIO):
     @property
     def local_extensions_settings_keys(self) -> dict[str, list[str]]:
         return self._local_extensions_settings_keys
+
+    @property
+    def json_gist_data(self) -> str:
+        return self._json_gist_data
 
     def _get_vscode_registered_vscode_profiles(self) -> bool:
         """Retrieve the list of profiles that vscode has registered internally
@@ -299,6 +309,52 @@ class FileIO(IFileIO):
             return False
         
         return True
+
+
+    def _list_gist_profiles(self, gist_key: str) -> bool:
+        """lists the various gists profiles for the approved github account"""
+        pass
+        # URL = "https://api.github.com/gists/" + gist_key
+        # response = requests.get(URL)
+        # print(response)
+        # if response.status_code == 200:
+        #     json_gist = json.loads(response.content)
+
+        # # print(f"{len(json_gist["files"].keys())} - {json_gist["files"].keys()} - {type(json_gist["files"].keys())}")
+
+        # if len(json_gist["files"].keys()) == 1:
+        #     key = list(json_gist["files"].keys())[0]
+        #     # for key in  json_gist["files"].keys():
+        #     print(key)
+        # # print(json_gist["files"][key])
+
+        # # print(f"{json_gist["files"][key]["content"]}")
+
+        # json_content = json.loads(json_gist["files"][key]["content"])
+        # print(json_content.keys())
+        # # print(json_gist["truncated"])
+        # # with open(URL, 'r') as url_gist:
+        # #     load_gist = json.load(url_gist)
+        # # print(load_gist)
+
+    def load_gist_profile_data(self, gist_key: str) -> bool:
+        """Load the data from a github gist for a specific gist key"""
+
+        URL = "https://api.github.com/gists/" + gist_key
+
+        response = requests.get(URL)
+        print(response)
+        if response.status_code == 200:
+            json_gist = json.loads(response.content)
+        else:
+            print(f"problem with network connection: {response.status_code}")
+            return False
+        
+        pprint (json_gist)
+        self._json_gist_key = gist_key
+        self._json_gist_data = json_gist
+        return True
+
 
 
     def _get_local_extensions_list_from_json_file(self) -> bool:
