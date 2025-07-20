@@ -1,9 +1,9 @@
 """ Python application to help clean up VSCode Profiles saved in github gists"""
 __author__ = "Squizzy"
-__copyright__ = "Copyright 2024, Squizzy"
-__credits__ = "Cursor code editor (/VSCode), Claude-AI"
-__license__ = "GPL"
-__version__ = "0.1"
+__copyright__ = "Copyright 2024-now, Squizzy"
+__credits__ = "MS for VSCode, all the extensions devs, all who give out advice"
+__license__ = "GPLv2"
+__version__ = "0.2"
 __maintainer__ = "Squizzy"
 
 import os
@@ -447,7 +447,8 @@ class FileIO(IFileIO):
         no_configuration: list[str] = []
         no_properties: list[str] = []
         for extension in self._local_extensions_from_folders:
-            print(f"Processing {extension}")
+            if False:
+                print(f"Processing {extension}")
             package_json_path = os.path.join(self._full_path_to_local_extensions, extension, PACKAGE_JSON_FILE)
             
             if not os.path.isfile(package_json_path):
@@ -457,38 +458,110 @@ class FileIO(IFileIO):
             with open(package_json_path, 'r', encoding='utf8') as package_json_file:
                 try:
                     package_json = json.load(package_json_file)
-                    print(f"  OK: {extension}: {"properties" in package_json}")
-                except Exception as e:
-                    print(f"    Error: {e}")
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding package.json for {extension}: {e}")
+
+            if "properties" not in str(package_json):
+                if False:
+                    print("skipping {extension}: No properties for settings")
+                continue
+
+            # in here, all package.json contain a property.
+            # all seem to contain a "contribute", "configuration" too (from the ones I have tested)
+            # not all have a "title" but most do
+            else:
+                extensions_settings_keys[extension] = []
+                if "configuration" in package_json["contributes"].keys():
+                    if type(package_json["contributes"]["configuration"]) == type({}):
+                        pass
+                        # print(package_json["contributes"]["configuration"].keys()) 
+                        # print(package_json["contributes"]["configuration"]["properties"].keys())
+                        for key in package_json["contributes"]["configuration"]["properties"].keys():
+                            extensions_settings_keys[extension].append(key)
+                    elif type(package_json["contributes"]["configuration"]) == type([]):
+                        # pass
+                        # print(f"{type(package_json["contributes"]["configuration"][0])} - {len(package_json["contributes"]["configuration"])}")
+                        # print()
+                        for item in package_json["contributes"]["configuration"]:
+                            if "properties" in str(item):
+                                for key in item["properties"].keys():
+                                    extensions_settings_keys[extension].append(key)                               
+                             # print(f"{item["properties"].keys()}")
+                                # pass
+                            # else:
+                            #     print("No")
+                        #     print()
+                        # print()
+
+
+                # print(f"{package_json["contributes"]["configuration"].keys()}")
+                    # print(f"{type(package_json["contributes"]["configuration"])} - {str(package_json["contributes"]["configuration"])[:20]}")
+                    # print()
+
+                # if "title" in str(package_json):
+                #     pass
+                #     print(f"YES - {extension}")
+                # else:
+                #     print(f"   NO - {extension}")
+                # # print(f"{package_json.keys()=}")
+                    
+
+                    # if extension == "marlinfirmware.auto-build-2.1.76":
+                    #     pprint(package_json)
+                    # input()
+                    #     print(f"YES - {extension}")
+                    # else:
+                    #     print(f"NO - {extension}")
+
+                #     print(f"  OK: {extension}: {"properties" in package_json}")
+                # except Exception as e:
+                    # print(f"    Error: {e}")
                     # if "properties" in package_json:
                     #     print(f"{extension}: YES")
                     #     print(f"{extension}: YES")
                     # else:
                     #     print(f)
                     # print(f"{package_json["contributes"]["configuration"]["title"]} - {package_json["contributes"]["configuration"]["properties"]}")
-                #     pprint(f"{package_json["displayName"]}: {package_json["contributes"]["configuration"]["@properties"]}", width=120)
+                    # pprint(f"{package_json["displayName"]}: {package_json["contributes"]["configuration"]["@properties"]}", width=120)
+                #     pprint(f"{package_json["displayName"]}: {package_json["contributes"]}", width=120)
+
                 #     print()
                 #     print()
                 # except ValueError as e:
                 #     print(f"Problem with package.json for {extension}: {e}")
+                #     pprint(f"{package_json["displayName"]}: {package_json["contributes"]["configuration"]}", width=120)
                 #     input()
                 #     return False
                 # except KeyError as e:
                 #     match e:
+                #         case "contributes":
+                #             no_contribute.append(package_json["displayName"])
+                #             print(f"Problem with package.json for {extension}: {e}")
+                #             pprint(f"{package_json["displayName"]}: {package_json}", width=120)
+                #             # break
                 #         case "configuration":
                 #             no_configuration.append(package_json["displayName"])
                 #             print(f"Problem with package.json for {extension}: {e}")
-                #             # break
-                #         case "contributes":
-                #             no_contribute.append(package_json["displayName"])
+                #             pprint(f"{package_json["displayName"]}: {package_json["contributes"]}", width=120)
                 #             # break
                 #         case "properties":
                 #             no_properties.append(package_json["displayName"])
+                #             print(f"Problem with package.json for {extension}: {e}")
+                #             pprint(f"{package_json["displayName"]}: {package_json["contributes"]["configuration"]}", width=120)
                 #             # break
                 #         case _:
                             
                 #             print(f"Problem with package.json for {extension}: {e}")
                 #     input()
+        # pprint(extensions_settings_keys)
+
+        self._local_extensions_settings_keys = extensions_settings_keys
+
+        total_extensions_keys = 0
+        for extension in extensions_settings_keys:
+            total_extensions_keys += len(extensions_settings_keys[extension])
+
+        print(f"Found {len(extensions_settings_keys)} extensions with settings keys, for a total of {total_extensions_keys} settings keys")
 
         return True
                     
