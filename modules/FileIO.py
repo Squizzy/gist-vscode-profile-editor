@@ -9,8 +9,10 @@ __maintainer__ = "Squizzy"
 # [ ] TODO: Move the assignment of OS-dependent paths to a dedicated method
 # [ ] TODO: Tests!
 # [ ] TODO: a popup that brings up the list of local profiles to edit / clean
+# [ ] TODO: use argsparse
 
 import os
+from enum import Enum
 import sys
 import json
 import xmltodict # type: ignore
@@ -19,6 +21,13 @@ import requests
 from tkinter import filedialog, messagebox #, ttk
 from abc import ABC, abstractmethod
 from pprint import pprint
+
+class RequestedPaths(Enum):
+    invalid = 0
+    globalStorage_storage_file = 1
+    local_profiles_path = 2
+
+
 
 class IFileIO(ABC):
     """Interface file for the file manager"""
@@ -89,6 +98,42 @@ class FileIO(IFileIO):
     def json_gist_data(self) -> str:
         return self._json_gist_data
 
+    def _get_os_paths(self, path_needed: RequestedPaths) -> str:
+        """ Provides the path to the needed files depending on the OS"""
+            # Set the path for the OS we are currently working with
+
+        
+        # _GLOBALSTORAGE_STORAGE_FILE : the path to the storage.json file containing VSCode setting with global information of profiles
+        # _LOCAL_PROFILES_PATH: local profiles path for the OS we are currently working with
+
+        if sys.platform == 'win32':
+            WINDOWS_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "globalStorage", "storage.json")
+            globalStorage_storage_json = WINDOWS_GLOBALSTORAGE_STORAGE_FILE
+            WINDOWS_LOCAL_PROFILES_PATH: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "profiles")
+            local_profiles_path = WINDOWS_LOCAL_PROFILES_PATH
+        elif sys.platform == 'darwin':
+            MACOS_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "globalStorage", "storage.json")
+            globalStorage_storage_json = MACOS_GLOBALSTORAGE_STORAGE_FILE
+            MACOS_LOCAL_PROFILES_PATH: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "profiles")
+            local_profiles_path = MACOS_LOCAL_PROFILES_PATH
+        elif sys.platform == 'linux':
+            LINUX_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profilesglobalStorage", "storage.json")
+            globalStorage_storage_json = LINUX_GLOBALSTORAGE_STORAGE_FILE
+            LINUX_LOCAL_PROFILES_PATH: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profiles")
+            local_profiles_path = LINUX_LOCAL_PROFILES_PATH
+        else:
+            print("Unsupported operating system")
+            return ""    
+
+        match path_needed:
+            case RequestedPaths.globalStorage_storage_file:
+                return globalStorage_storage_json
+            case RequestedPaths.local_profiles_path:
+                return local_profiles_path
+            case _, RequestedPaths.invalid:
+                return ""
+
+
     def _get_vscode_registered_vscode_profiles(self) -> bool:
         """Retrieve the list of profiles that vscode has registered internally
         
@@ -100,20 +145,24 @@ class FileIO(IFileIO):
         """
         globalStorage_storage_json = ""
         
-        # Set the path for the OS we are currently working with
-        if os.name == 'nt':
-            WINDOWS_GLOBAL_STORAGE_FILE: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "globalStorage", "storage.json")
-            globalStorage_storage_json = WINDOWS_GLOBAL_STORAGE_FILE
-        elif os.name == 'darwin':
-            MACOS_GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "globalStorage", "storage.json")
-            globalStorage_storage_json = MACOS_GLOBAL_STORAGE_FILE
-        elif os.name == 'posix':
-            LINUX__GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profilesglobalStorage", "storage.json")
-            globalStorage_storage_json = LINUX__GLOBAL_STORAGE_FILE
-        else:
-            print("Unsupported operating system")
-            return False
+
+        # # Set the path for the OS we are currently working with
+        # if os.name == 'nt':
+        #     WINDOWS_GLOBAL_STORAGE_FILE: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "globalStorage", "storage.json")
+        #     globalStorage_storage_json = WINDOWS_GLOBAL_STORAGE_FILE
+        # elif os.name == 'darwin':
+        #     MACOS_GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "globalStorage", "storage.json")
+        #     globalStorage_storage_json = MACOS_GLOBAL_STORAGE_FILE
+        # elif os.name == 'posix':
+        #     LINUX__GLOBAL_STORAGE_FILE: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profilesglobalStorage", "storage.json")
+        #     globalStorage_storage_json = LINUX__GLOBAL_STORAGE_FILE
+        # else:
+        #     print("Unsupported operating system")
+            # return False
         
+        if not (globalStorage_storage_json := self._get_os_paths(RequestedPaths.globalStorage_storage_file)):
+            print("Path to VSCode's globalStorage not found, aborting")
+            return False
         
         if not os.path.isfile(globalStorage_storage_json):
             print("No VSCode globalStorage storage.json, aborting")
@@ -154,20 +203,24 @@ class FileIO(IFileIO):
         if not self._get_vscode_registered_vscode_profiles():
             return False
         
-        # Set the local profiles path for the OS we are currently working with
-        if os.name == 'nt':
-            WINDOWS_PATH: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "profiles")
-            local_profiles_path = WINDOWS_PATH
-        elif os.name == 'darwin':
-            MACOS_PATH: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "profiles")
-            local_profiles_path = MACOS_PATH
-        elif os.name == 'posix':
-            LINUX_PATH: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profiles")
-            local_profiles_path = LINUX_PATH
-        else:
-            print("Unsupported operating system")
-            return False 
+        # # Set the local profiles path for the OS we are currently working with
+        # if os.name == 'nt':
+        #     WINDOWS_PATH: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "profiles")
+        #     local_profiles_path = WINDOWS_PATH
+        # elif os.name == 'darwin':
+        #     MACOS_PATH: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "profiles")
+        #     local_profiles_path = MACOS_PATH
+        # elif os.name == 'posix':
+        #     LINUX_PATH: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profiles")
+        #     local_profiles_path = LINUX_PATH
+        # else:
+        #     print("Unsupported operating system")
+        #     return False 
         
+        if not (local_profiles_path := self._get_os_paths(RequestedPaths.local_profiles_path)):
+            print("Path to VSCode's globalStorage not found, aborting")
+            return False
+
         self._full_path_to_local_profiles = local_profiles_path
         
         # Check that the folder for the local profiles exists
@@ -175,9 +228,12 @@ class FileIO(IFileIO):
             print("No local profiles folder found, aborting")
         
         # Check that there are local profiles stored in the local profiles folder
-        local_profiles = os.listdir(local_profiles_path)
-        if local_profiles == []:
+        local_profiles_scanned = os.scandir(local_profiles_path)
+        if local_profiles_scanned == []:
             print("No local profiles found, aborting")
+
+        # Remove files, keep only folders (eg created by VSCode, by MacOS etc..)
+        local_profiles = [entry.name for entry in local_profiles_scanned if os.DirEntry.is_dir(entry)]
 
         # check that all the local profile folders identified in the local profiles folder the same as that 
         # registered in vscode in globalStorage storage.json
@@ -191,7 +247,7 @@ class FileIO(IFileIO):
         
         return True
 
-    def _get_vscode_profile_filename_from_command_line(self) -> bool:
+    def _get_vscode_profile_filename_from_command_line(self, args: list[str]) -> bool:
         """Parses the command line argument and returns the location of the profile data, if any
         
         returns:
@@ -199,25 +255,36 @@ class FileIO(IFileIO):
         """
         prefix_found: bool = False
         filename_arg_expected: bool = False
+        # print(sys.argv)
+        #TODO: Replace with argsparse
 
-        for arg in sys.argv:
-            if arg == "-f":
-                if not prefix_found:
-                    prefix_found = True
-                    filename_arg_expected = True
-                    continue
-                else:
+        for arg_pos in range(len(args)):
+            if args[arg_pos] == "-f":
+                if arg_pos == len(args) - 1:
                     print("-f requires a file name to be provided. ignoring.")
                     return False
-            elif filename_arg_expected:
-                # TODO: need to check that arg is a file that is reachable
-                self._profile_to_modify_filepath = arg
-                break
-            else:
-                print("command line argument not recognised. ignoring it.")
-                return False
+                # if not args[arg_pos + 1]:
+                # if not prefix_found:
+                #     prefix_found = True
+                #     filename_arg_expected = True
+                #     continue
+                elif (arg_pos + 1) <= len(args) - 1:
+                    if len(args[arg_pos + 1]) == 0:
+                        print("-f requires a file name to be provided. ignoring.")
+                        return False
+                    else:
+                        self._profile_to_modify_filepath = args[arg_pos + 1]
+                        return True
+            # elif filename_arg_expected:
+            #     print(arg)
+            #     # TODO: need to check that arg is a file that is reachable
+            #     self._profile_to_modify_filepath = arg
+            #     break
+            # else:
+            #     print("command line argument not recognised. ignoring it.")
+            #     return False
             
-        return True
+        return False
         
     def _get_vscode_profile_filename_from_filedialog(self) -> bool:
         """Use a popup to let the user select the file to process
