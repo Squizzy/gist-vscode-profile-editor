@@ -317,7 +317,7 @@ class FileIO(IFileIO):
 
     def _list_gist_profiles(self, gist_key: str) -> bool:
         """lists the various gists profiles for the approved github account"""
-        pass
+        return False
         # URL = "https://api.github.com/gists/" + gist_key
         # response = requests.get(URL)
         # print(response)
