@@ -1,10 +1,14 @@
-""" Python application to help clean up VSCode Profiles saved in github gists"""
+""" Python module to load and save VSCode profiles and extensions data from files / URL"""
 __author__ = "Squizzy"
 __copyright__ = "Copyright 2024-now, Squizzy"
 __credits__ = "MS for VSCode, all the extensions devs, all who give out advice"
 __license__ = "GPLv2"
 __version__ = "0.2"
 __maintainer__ = "Squizzy"
+
+# [ ] TODO: Move the assignment of OS-dependent paths to a dedicated method
+# [ ] TODO: Tests!
+# [ ] TODO: a popup that brings up the list of local profiles to edit / clean
 
 import os
 import sys
