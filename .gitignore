@@ -1,2 +1,3 @@
 working-dir/
 .mypy_cache/
+__pycache__/
