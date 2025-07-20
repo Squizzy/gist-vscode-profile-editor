@@ -10,9 +10,7 @@ import os
 import sys
 import json
 import xmltodict # type: ignore
-# import tkinter as tk
 from tkinter import filedialog, messagebox #, ttk
-# from pydantic import BaseModel
 from abc import ABC, abstractmethod
 from pprint import pprint
 
@@ -29,6 +27,12 @@ class IFileIO(ABC):
         """
         pass
 
+    @abstractmethod
+    def load_extensions_settings_keys(self) -> bool:
+        """Gather the settings keys from the extensions that are on the machine"""
+        pass
+
+
 class FileIO(IFileIO):
     """File manager to read and write the profiles and extensions data"""
     _local_vscode_registered_profiles: dict[str, str]
@@ -42,8 +46,8 @@ class FileIO(IFileIO):
     
     _local_extensions_settings_keys: dict[str, list[str]] # key: extension name, value: list of settings key values
     
-    _profile_to_modify_filepath: str
-    _profile_to_modify_data: str
+    _profile_to_modify_filepath: str # the location of the file to be modified
+    _data_of_profile_to_modify: str # the data from the profile, not JSON decoded yet
 
     def __init__(self):
         self._local_vscode_registered_profiles = {}
@@ -60,12 +64,16 @@ class FileIO(IFileIO):
         self._local_extensions_settings_keys = {}
         
         self._profile_to_modify_filepath = ""
-        self._profile_to_modify_data = ""
+        self._data_of_profile_to_modify = ""
         pass
 
     @property
     def profile_data(self) -> str:
-        return self._profile_to_modify_data
+        return self._data_of_profile_to_modify
+
+    @property
+    def local_extensions_settings_keys(self) -> dict[str, list[str]]:
+        return self._local_extensions_settings_keys
 
     def _get_vscode_registered_vscode_profiles(self) -> bool:
         """Retrieve the list of profiles that vscode has registered internally
@@ -118,8 +126,8 @@ class FileIO(IFileIO):
         
         return True
 
-    def _get_vscode_local_profiles(self) -> bool:
-        """Retrieve all VSCode profiles on the current machine
+    def _get_vscode_local_profiles_folder_names(self) -> bool:
+        """Retrieve all VSCode profiles on the current machine (the folder names under which the profiles are stored)
         profiles are stored in the following locations:
         Windows:    %APPDATA%\\Code\\User\\profiles
         macOS       $HOME/Library/Application\\ Support/Code/User/profiles.
@@ -197,7 +205,7 @@ class FileIO(IFileIO):
             
         return True
         
-    def _get_vscode_profile_filename_from_popup(self) -> bool:
+    def _get_vscode_profile_filename_from_filedialog(self) -> bool:
         """Use a popup to let the user select the file to process
         """
         file_path: str
@@ -262,7 +270,7 @@ class FileIO(IFileIO):
         
         # Check the data is json compliant before accepting
         try:
-            self._profile_to_modify_data = json.loads(retrieved_data)
+            self._data_of_profile_to_modify = json.loads(retrieved_data)
         except json.JSONDecodeError:
             # could be done more gracefully with requesting another file for example
             print(f"Problem with file {self._profile_to_modify_filepath}: Not a proper VSCode Profile file (json format expected), aborting")
@@ -278,10 +286,11 @@ class FileIO(IFileIO):
         """
 
         if len(sys.argv) > 0:
-            # use command line arguments
+            # use command line arguments first
             if not self._get_vscode_profile_filename_from_command_line():
 
-                if not self._get_vscode_profile_filename_from_popup():
+                # if that failed, bring up the popup
+                if not self._get_vscode_profile_filename_from_filedialog():
                     print("No file selected, aborting.")
                     return False
 
@@ -353,7 +362,8 @@ class FileIO(IFileIO):
         extensions_list: dict[str, tuple[str, str]] = {}
         obsolete_count: int = 0
 
-        self._get_local_extensions_list_from_json_file()
+        if not self._get_local_extensions_list_from_json_file():
+            return False
 
         # Set the path for the OS we are currently working with
         if os.name == 'nt':
@@ -436,9 +446,12 @@ class FileIO(IFileIO):
         
         return True
             
-    def _get_extensions_settings_keys(self) -> bool:
+    def load_extensions_settings_keys(self) -> bool:
         """Extract the settings keys for each extension"""
-        print("PROCESSING EXTENSIONS")
+
+        if not self._get_local_extensions_list_from_folders():
+            return False
+
         extensions_settings_keys: dict[str, list[str]] = {}
         
         PACKAGE_JSON_FILE = "package.json"
