@@ -86,6 +86,8 @@ class FileIO(IFileIO):
     
     _local_extensions_settings_keys: dict[str, list[str]] # key: extension name, value: list of settings key values
     
+    _local_profile_extensions: tuple[str, dict] # str: path to the profile's extensions.json, dict: the content of the file
+
     _filepath_of_profile_to_modify: str # the location of the file to be modified
     _data_of_profile_to_modify: str # the data from the profile, not JSON decoded yet
 
@@ -115,6 +117,8 @@ class FileIO(IFileIO):
         self._max_settings_file_size = 100_000
 
         self._json_gist_data = ""
+
+        self._local_profile_extensions = ()
         pass
 
     @property
@@ -743,6 +747,23 @@ class FileIO(IFileIO):
         self._local_extensions_settings_keys = extensions_settings_keys
         return True
     
+    def load_local_profile_extensions_list(self, profile_path:str) -> bool:
+        local_profile_extensions_path = os.path.join("test_profiles", profile_path, "extensions.json")
+        # local_profile_extensions_file = os.path.join("..", "..", "test_profiles", profile_path, "extensions.json")
+        if not os.path.isfile(local_profile_extensions_path):
+            # print(os.getcwd())
+            print(f"profile path {local_profile_extensions_path} not found")
+            return False
+
+        print(local_profile_extensions_path)
+        with open(local_profile_extensions_path, 'r') as local_profile_extensions_file:
+            local_profile_extensions = json.load(local_profile_extensions_file)
+        # print(local_profile_extensions)
+        # print(type(local_profile_extensions))
+
+        self._local_profile_extensions = (local_profile_extensions_file, local_profile_extensions)
+        
+        pass
             
     def save_profile(self):
         pass
