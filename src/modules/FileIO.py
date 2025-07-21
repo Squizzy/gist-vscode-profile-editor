@@ -25,7 +25,8 @@ from pprint import pprint
 class RequestedPaths(Enum):
     invalid = 0
     globalStorage_storage_file = 1
-    local_profiles_path = 2
+    local_profiles_folder = 2
+    extensions_folder = 3
 
 
 
@@ -45,6 +46,24 @@ class IFileIO(ABC):
     @abstractmethod
     def load_extensions_settings_keys(self) -> bool:
         """Gather the settings keys from the extensions that are on the machine"""
+        pass
+
+    @property
+    @abstractmethod
+    def profile_data(self) -> str:
+        """The raw data gathered from a profile settings"""
+        pass
+
+    @property
+    @abstractmethod
+    def local_extensions_settings_keys(self) -> dict[str, list[str]]:
+        """The list of extensions on the machine and their associated keys that can be used in settings"""
+        pass
+
+    @property
+    @abstractmethod
+    def json_gist_data(self) -> str:
+        """The raw data of a github gist of a VSCode Profile"""
         pass
 
 
@@ -67,6 +86,8 @@ class FileIO(IFileIO):
     _json_gist_key: str
     _json_gist_data: str
 
+    _max_settings_file_size: int
+
 
     def __init__(self):
         self._local_vscode_registered_profiles = {}
@@ -84,6 +105,8 @@ class FileIO(IFileIO):
         
         self._profile_to_modify_filepath = ""
         self._data_of_profile_to_modify = ""
+
+        self._max_settings_file_size = 100_000
         pass
 
     @property
@@ -102,34 +125,43 @@ class FileIO(IFileIO):
         """ Provides the path to the needed files depending on the OS"""
             # Set the path for the OS we are currently working with
 
-        
         # _GLOBALSTORAGE_STORAGE_FILE : the path to the storage.json file containing VSCode setting with global information of profiles
         # _LOCAL_PROFILES_PATH: local profiles path for the OS we are currently working with
+        # _EXTENSIONS_FOLDER: local path to where the extensions are stored
 
         if sys.platform == 'win32':
             WINDOWS_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "globalStorage", "storage.json")
             globalStorage_storage_json = WINDOWS_GLOBALSTORAGE_STORAGE_FILE
             WINDOWS_LOCAL_PROFILES_PATH: str = os.path.join(str(os.getenv('APPDATA')), "Code", "User", "profiles")
             local_profiles_path = WINDOWS_LOCAL_PROFILES_PATH
+            WINDOWS_EXTENSIONS_FOLDER: str = os.path.join(str(os.getenv('USERPROFILE')), ".vscode", "extensions")
+            local_extensions_folder = WINDOWS_EXTENSIONS_FOLDER
         elif sys.platform == 'darwin':
             MACOS_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "globalStorage", "storage.json")
             globalStorage_storage_json = MACOS_GLOBALSTORAGE_STORAGE_FILE
             MACOS_LOCAL_PROFILES_PATH: str = os.path.join(os.environ['HOME'], "Library", "Application Support", "Code", "User", "profiles")
             local_profiles_path = MACOS_LOCAL_PROFILES_PATH
+            MACOS_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            local_extensions_folder = MACOS_EXTENSIONS_FOLDER
         elif sys.platform == 'linux':
             LINUX_GLOBALSTORAGE_STORAGE_FILE: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profilesglobalStorage", "storage.json")
             globalStorage_storage_json = LINUX_GLOBALSTORAGE_STORAGE_FILE
             LINUX_LOCAL_PROFILES_PATH: str = os.path.join(os.environ['HOME'], ".config", "Code", "User", "profiles")
             local_profiles_path = LINUX_LOCAL_PROFILES_PATH
+            LINUX_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+            local_extensions_folder = LINUX_EXTENSIONS_FOLDER
         else:
             print("Unsupported operating system")
             return ""    
 
+
         match path_needed:
             case RequestedPaths.globalStorage_storage_file:
                 return globalStorage_storage_json
-            case RequestedPaths.local_profiles_path:
+            case RequestedPaths.local_profiles_folder:
                 return local_profiles_path
+            case RequestedPaths.extensions_folder:
+                return local_extensions_folder
             case _, RequestedPaths.invalid:
                 return ""
 
@@ -217,7 +249,7 @@ class FileIO(IFileIO):
         #     print("Unsupported operating system")
         #     return False 
         
-        if not (local_profiles_path := self._get_os_paths(RequestedPaths.local_profiles_path)):
+        if not (local_profiles_path := self._get_os_paths(RequestedPaths.local_profiles_folder)):
             print("Path to VSCode's globalStorage not found, aborting")
             return False
 
@@ -251,17 +283,17 @@ class FileIO(IFileIO):
         """Parses the command line argument and returns the location of the profile data, if any
         
         returns:
-            (str): The location of the file containing the json of the VSCode profile
+            (str): The location of the files containing the json of the local VSCode profile data
         """
-        prefix_found: bool = False
-        filename_arg_expected: bool = False
+        # prefix_found: bool = False
+        # filename_arg_expected: bool = False
         # print(sys.argv)
         #TODO: Replace with argsparse
 
         for arg_pos in range(len(args)):
             if args[arg_pos] == "-f":
                 if arg_pos == len(args) - 1:
-                    print("-f requires a file name to be provided. ignoring.")
+                    print("-f requires a folder path to be provided. ignoring.")
                     return False
                 # if not args[arg_pos + 1]:
                 # if not prefix_found:
@@ -270,11 +302,15 @@ class FileIO(IFileIO):
                 #     continue
                 elif (arg_pos + 1) <= len(args) - 1:
                     if len(args[arg_pos + 1]) == 0:
-                        print("-f requires a file name to be provided. ignoring.")
+                        print("-f requires a folder path to be provided. ignoring.")
                         return False
                     else:
-                        self._profile_to_modify_filepath = args[arg_pos + 1]
-                        return True
+                        if os.path.isdir(args[arg_pos + 1]):
+                            self._profile_to_modify_filepath = args[arg_pos + 1]
+                            return True
+                        else:
+                            print("The folder path provided does not exist, ignoring")
+                            return False
             # elif filename_arg_expected:
             #     print(arg)
             #     # TODO: need to check that arg is a file that is reachable
@@ -327,16 +363,20 @@ class FileIO(IFileIO):
         """
 
         # Check if user is ok to load a large file
-        MAX_FILE_SIZE: int = 100_000
+        MAX_FILE_SIZE = self._max_settings_file_size
         
-        file_size = os.path.getsize(self._profile_to_modify_filepath)
+        try:
+            file_size = os.path.getsize(self._profile_to_modify_filepath)
+        except FileNotFoundError as e:
+            print(f"File {self._profile_to_modify_filepath} not found, aborting")
+            return False
         
         if file_size > MAX_FILE_SIZE:
             load_anyway: bool = messagebox.askyesno(title="Large file size detected", 
                                                     message=f"""File is more than {MAX_FILE_SIZE} bytes
                                                                 This seems rather large.
                                                                 Load anyway?""")
-            if load_anyway == messagebox.NO:
+            if not load_anyway:
                 print("file too large, user aborted")
                 return False        
 
@@ -349,14 +389,16 @@ class FileIO(IFileIO):
             print(f"File {self._profile_to_modify_filepath} not found, aborting")
             return False
         
-        # Check the data is json compliant before accepting
-        try:
-            self._data_of_profile_to_modify = json.loads(retrieved_data)
-        except json.JSONDecodeError:
-            # could be done more gracefully with requesting another file for example
-            print(f"Problem with file {self._profile_to_modify_filepath}: Not a proper VSCode Profile file (json format expected), aborting")
-            return False
+        # This will be moved to the parser
+        # # Check the data is json compliant before accepting
+        # try:
+        #     self._data_of_profile_to_modify = json.loads(retrieved_data)
+        # except json.JSONDecodeError:
+        #     # could be done more gracefully with requesting another file for example
+        #     print(f"Problem with file {self._profile_to_modify_filepath}: Not a proper VSCode Profile file (json format expected), aborting")
+        #     return False
         
+        self._data_of_profile_to_modify = retrieved_data
         return True
         
     def load_vscode_profile_to_modify(self) -> bool:
@@ -368,7 +410,7 @@ class FileIO(IFileIO):
 
         if len(sys.argv) > 0:
             # use command line arguments first
-            if not self._get_vscode_profile_filename_from_command_line():
+            if not self._get_vscode_profile_filename_from_command_line(sys.argv):
 
                 # if that failed, bring up the popup
                 if not self._get_vscode_profile_filename_from_filedialog():
@@ -492,20 +534,24 @@ class FileIO(IFileIO):
         if not self._get_local_extensions_list_from_json_file():
             return False
 
-        # Set the path for the OS we are currently working with
-        if os.name == 'nt':
-            WINDOWS_EXTENSIONS_FOLDER: str = os.path.join(str(os.getenv('USERPROFILE')), ".vscode", "extensions")
-            local_extensions_folder = WINDOWS_EXTENSIONS_FOLDER
-        elif os.name == 'darwin':
-            MACOS_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
-            local_extensions_folder = MACOS_EXTENSIONS_FOLDER
-        elif os.name == 'posix':
-            LINUX_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
-            local_extensions_folder = LINUX_EXTENSIONS_FOLDER
-        else:
-            print("Unsupported operating system")
-            return False
+        # # Set the path for the OS we are currently working with
+        # if os.name == 'nt':
+        #     WINDOWS_EXTENSIONS_FOLDER: str = os.path.join(str(os.getenv('USERPROFILE')), ".vscode", "extensions")
+        #     local_extensions_folder = WINDOWS_EXTENSIONS_FOLDER
+        # elif os.name == 'darwin':
+        #     MACOS_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+        #     local_extensions_folder = MACOS_EXTENSIONS_FOLDER
+        # elif os.name == 'posix':
+        #     LINUX_EXTENSIONS_FOLDER: str = os.path.join(os.environ['HOME'], ".vscode", "extensions")
+        #     local_extensions_folder = LINUX_EXTENSIONS_FOLDER
+        # else:
+        #     print("Unsupported operating system")
+        #     return False
 
+        if not (local_extensions_folder := self._get_os_paths(RequestedPaths.extensions_folder)):
+            print("Path to VSCode's globalStorage not found, aborting")
+            return False
+        
         self._full_path_to_local_extensions = local_extensions_folder
 
         # Check that the folder for the local extensions exists
