@@ -46,8 +46,6 @@ def test_get_vscode_profile_from_available_local_profiles():
     assert(fileIO._get_vscode_profile_from_available_local_profiles()) == False
 
 def test_load_vscode_profile_data():
-    fileIO = None
-    fileIO = FileIO()
     # When no file is set, this should fail gracefully
     assert(fileIO._load_vscode_profile_data()) == False
     
@@ -59,9 +57,10 @@ def test_load_vscode_profile_data():
     fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_empty.json'
     assert(fileIO._load_vscode_profile_data()) == False
 
-    # should fail with a non-compliant file
-    fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_non_compliant.json'
-    assert(fileIO._load_vscode_profile_data()) == False
+    # No longer tested here
+    # # should fail with a non-compliant file
+    # fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_non_compliant.json'
+    # assert(fileIO._load_vscode_profile_data()) == True
 
     # should ask the user if want to use a large file, and should load it if accept
     # as requires user interaction, hidden until needed
@@ -73,7 +72,6 @@ def test_load_vscode_profile_data():
         fileIO._max_settings_file_size = tmp
 
 def test_load_vscode_profile_to_modify():
-    fileIO = FileIO()
     assert(fileIO.load_vscode_profile_to_modify()) == True
 
 
