@@ -44,6 +44,12 @@ class IFileIO(ABC):
         pass
 
     @abstractmethod
+    def load_vscode_gist_to_modify(self) -> bool:
+        """Acquire the raw data from the Gist VSCode PRofile to be processed"""
+        pass
+
+
+    @abstractmethod
     def load_extensions_settings_keys(self) -> bool:
         """Gather the settings keys from the extensions that are on the machine"""
         pass
@@ -80,7 +86,7 @@ class FileIO(IFileIO):
     
     _local_extensions_settings_keys: dict[str, list[str]] # key: extension name, value: list of settings key values
     
-    _profile_to_modify_filepath: str # the location of the file to be modified
+    _filepath_of_profile_to_modify: str # the location of the file to be modified
     _data_of_profile_to_modify: str # the data from the profile, not JSON decoded yet
 
     _json_gist_key: str
@@ -103,10 +109,12 @@ class FileIO(IFileIO):
         
         self._local_extensions_settings_keys = {}
         
-        self._profile_to_modify_filepath = ""
+        self._filepath_of_profile_to_modify = ""
         self._data_of_profile_to_modify = ""
 
         self._max_settings_file_size = 100_000
+
+        self._json_gist_data = ""
         pass
 
     @property
@@ -293,24 +301,36 @@ class FileIO(IFileIO):
         for arg_pos in range(len(args)):
             if args[arg_pos] == "-f":
                 if arg_pos == len(args) - 1:
-                    print("-f requires a folder path to be provided. ignoring.")
+                    print("-f requires the path to a file to be provided. ignoring.")
                     return False
-                # if not args[arg_pos + 1]:
-                # if not prefix_found:
-                #     prefix_found = True
-                #     filename_arg_expected = True
-                #     continue
                 elif (arg_pos + 1) <= len(args) - 1:
                     if len(args[arg_pos + 1]) == 0:
-                        print("-f requires a folder path to be provided. ignoring.")
+                        print("-f requires the path to a file to be provided. ignoring.")
                         return False
                     else:
-                        if os.path.isdir(args[arg_pos + 1]):
-                            self._profile_to_modify_filepath = args[arg_pos + 1]
+                        if os.path.isfile(args[arg_pos + 1]):
+                            self._filepath_of_profile_to_modify = args[arg_pos + 1]
+                            self._gist_key_of_gist_profile_to_modify = ""
                             return True
                         else:
-                            print("The folder path provided does not exist, ignoring")
+                            print(f"The file selected {args[arg_pos + 1]} cannot be found, ignoring")
                             return False
+
+            elif args[arg_pos] == "-u":
+                if arg_pos == len(args) - 1:
+                    print("-u requires the github gist key to be provided. ignoring.")
+                    return False
+                elif (arg_pos + 1) <= len(args) - 1:
+                    if len(args[arg_pos + 1]) == 0:
+                        print("-u requires the github gist key to be provided. ignoring.")
+                        return False
+                    else:
+                        self._gist_key_of_gist_profile_to_modify = args[arg_pos + 1]
+                        self._filepath_of_profile_to_modify = ""
+                        return True
+
+
+
             # elif filename_arg_expected:
             #     print(arg)
             #     # TODO: need to check that arg is a file that is reachable
@@ -332,7 +352,7 @@ class FileIO(IFileIO):
             filetypes=[("JSON files", "*.json")])
         
         if file_path:
-            self._profile_to_modify_filepath = file_path
+            self._filepath_of_profile_to_modify = file_path
             return True
         else:
             print("No file selected, aborting.")
@@ -357,26 +377,27 @@ class FileIO(IFileIO):
 
     def _load_vscode_profile_data(self) -> bool:
         """Attempt to load the data from the file selected by the user
+        This does not attempt to check if the data is a valid json
         
         return:
-            (bool): True if the file is a valid JSON, False otherwise
+            (bool): True if the file is a data loaded, False otherwise
         """
 
         # Check if user is ok to load a large file
         MAX_FILE_SIZE = self._max_settings_file_size
         
-        if os.path.isdir(self._profile_to_modify_filepath):
-            print(f"A folder was selected rather than a file: {self._profile_to_modify_filepath}, aborting")
+        if os.path.isdir(self._filepath_of_profile_to_modify):
+            print(f"A folder was selected rather than a file: {self._filepath_of_profile_to_modify}, aborting")
             return False
 
         try:
-            file_size = os.path.getsize(self._profile_to_modify_filepath)
+            file_size = os.path.getsize(self._filepath_of_profile_to_modify)
         except FileNotFoundError as e:
-            print(f"File {self._profile_to_modify_filepath} not found, aborting")
+            print(f"File {self._filepath_of_profile_to_modify} not found, aborting")
             return False
         
         if file_size == 0:
-            print(f"Error, settings file {self._profile_to_modify_filepath} is empty, aborting")
+            print(f"Error, settings file {self._filepath_of_profile_to_modify} is empty, aborting")
             return False
         
         if file_size > MAX_FILE_SIZE:
@@ -391,10 +412,10 @@ class FileIO(IFileIO):
         # Load the data
         retrieved_data: str
         try:
-            with open(self._profile_to_modify_filepath, 'r') as vscode_profile_json_file:
+            with open(self._filepath_of_profile_to_modify, 'r') as vscode_profile_json_file:
                 retrieved_data = vscode_profile_json_file.read(file_size)
         except FileNotFoundError:
-            print(f"File {self._profile_to_modify_filepath} not found, aborting")
+            print(f"File {self._filepath_of_profile_to_modify} not found, aborting")
             return False
         
         # This will be moved to the parser
@@ -424,6 +445,11 @@ class FileIO(IFileIO):
                 if not self._get_vscode_profile_filename_from_filedialog():
                     print("No file selected, aborting.")
                     return False
+            
+        if self._data_of_profile_to_modify == "":
+            print("No data to modify provided, aborting")
+            return False
+
 
         if not self._load_vscode_profile_data():
             print("No data found in the profile file, or not a proper VSCode profile file, aborting")
@@ -431,6 +457,30 @@ class FileIO(IFileIO):
         
         return True
 
+
+    def load_vscode_gist_to_modify(self) -> bool:
+        """Retrieve the content of a vscode profile file or URL following different logic for selecting the file to load
+        
+        returns:
+            (str): the json raw data from the profile
+        """
+
+        if len(sys.argv) > 0:
+            # use command line arguments first
+            if not self._get_vscode_profile_filename_from_command_line(sys.argv):
+                print("No gist key specified, aborting")
+                return False
+            
+            if self._gist_key_of_gist_profile_to_modify == "":
+                print("No data in the gist profile to modify, aborting")
+                return False
+
+
+        if not self._load_gist_profile_data():
+            print("No data found in the profile file, or not a proper VSCode profile file, aborting")
+            return False
+        
+        return True
 
     def _list_gist_profiles(self, gist_key: str) -> bool:
         """lists the various gists profiles for the approved github account"""
@@ -458,10 +508,14 @@ class FileIO(IFileIO):
         # #     load_gist = json.load(url_gist)
         # # print(load_gist)
 
-    def load_gist_profile_data(self, gist_key: str) -> bool:
+    def _load_gist_profile_data(self) -> bool:
+    # def _load_gist_profile_data(self, gist_key: str) -> bool:
         """Load the data from a github gist for a specific gist key"""
 
-        URL = "https://api.github.com/gists/" + gist_key
+        URL = "https://api.github.com/gists/" + self._gist_key_of_gist_profile_to_modify
+        print(URL)
+        # URL = "https://api.github.com/gists/" + gist_key
+        
 
         response = requests.get(URL)
         print(response)
@@ -471,8 +525,8 @@ class FileIO(IFileIO):
             print(f"problem with network connection: {response.status_code}")
             return False
         
-        pprint (json_gist)
-        self._json_gist_key = gist_key
+        # pprint (json_gist)
+        # self._json_gist_key = gist_key
         self._json_gist_data = json_gist
         return True
 
