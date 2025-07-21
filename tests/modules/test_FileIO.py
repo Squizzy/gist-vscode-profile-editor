@@ -50,11 +50,11 @@ def test_load_vscode_profile_data():
     assert(fileIO._load_vscode_profile_data()) == False
     
     # but work with a file presented
-    fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_small.json'
+    fileIO._filepath_of_profile_to_modify = 'tests/modules/test_settings_small.json'
     assert(fileIO._load_vscode_profile_data()) == True
 
     # should fail with an empty file
-    fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_empty.json'
+    fileIO._filepath_of_profile_to_modify = 'tests/modules/test_settings_empty.json'
     assert(fileIO._load_vscode_profile_data()) == False
 
     # No longer tested here
@@ -67,7 +67,7 @@ def test_load_vscode_profile_data():
     if False:
         tmp = fileIO._max_settings_file_size
         fileIO._max_settings_file_size = 10
-        fileIO._profile_to_modify_filepath = 'tests/modules/test_settings_large.json'
+        fileIO._filepath_of_profile_to_modify = 'tests/modules/test_settings_large.json'
         assert(fileIO._load_vscode_profile_data()) == True
         fileIO._max_settings_file_size = tmp
 
@@ -80,11 +80,11 @@ def test_list_gist_profiles():
     pass
 
 def test_load_gist_profile_data():
-    assert(fileIO.load_gist_profile_data('')) == False
+    assert(fileIO._load_gist_profile_data('')) == False
     # real key open online (https://gist.github.com/pyxelr/760dac032d0427377ecc1bb195499d9b)
     # not sure what the best key to use should be really.
     # used for test
-    assert(fileIO.load_gist_profile_data('760dac032d0427377ecc1bb195499d9b')) == True
+    assert(fileIO._load_gist_profile_data('760dac032d0427377ecc1bb195499d9b')) == True
 
 
 def test_get_local_extensions_list_from_json_file():
