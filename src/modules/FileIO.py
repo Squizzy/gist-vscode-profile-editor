@@ -365,10 +365,18 @@ class FileIO(IFileIO):
         # Check if user is ok to load a large file
         MAX_FILE_SIZE = self._max_settings_file_size
         
+        if os.path.isdir(self._profile_to_modify_filepath):
+            print(f"A folder was selected rather than a file: {self._profile_to_modify_filepath}, aborting")
+            return False
+
         try:
             file_size = os.path.getsize(self._profile_to_modify_filepath)
         except FileNotFoundError as e:
             print(f"File {self._profile_to_modify_filepath} not found, aborting")
+            return False
+        
+        if file_size == 0:
+            print(f"Error, settings file {self._profile_to_modify_filepath} is empty, aborting")
             return False
         
         if file_size > MAX_FILE_SIZE:
